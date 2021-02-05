@@ -47,6 +47,129 @@ On the example of the _milk_ product suggested above, the availability intervals
 The technical solution for the problem described above 
 is implemented via [dbt - data build tool](https://docs.getdbt.com).
 
+## Solution description
+
+For the sake of an easier reading of what this project actually does, here will be presented 
+visually, step by step how the deletions of the products from the staged data is being inferred.
+
+If the `raw_products` staging table has the following representation:
+
+![raw products](docs/raw-products.png)
+
+
+The starting point is to build a cartesian product between the staging dates and the staged product ids:
+
+```sql
+SELECT product_id,
+       export_time
+FROM (
+        (SELECT DISTINCT product_id
+        FROM playground.dbt_shop.raw_products)
+        CROSS JOIN
+        (SELECT DISTINCT export_time
+        FROM playground.dbt_shop.raw_products) AS staged_date
+);
+```
+
+![cartesian product](docs/cartesian-product-product-export_time.png)
+
+From the cartesian product the following <product id, export_time> entries are chopped off:
+- the ones that happen before  the first appearance of a staged entry for a product (marked in red)
+- the ones that are found within the staging entries (marked in yellow)
+
+
+```sql
+SELECT product_id,
+       export_time
+FROM (
+          SELECT product_id,
+                 export_time
+          FROM (
+                  (SELECT DISTINCT product_id
+                  FROM playground.dbt_shop.raw_products)
+                  CROSS JOIN
+                  (SELECT DISTINCT export_time
+                  FROM playground.dbt_shop.raw_products) AS staged_date
+          )
+) staged_product_date
+WHERE staged_product_date.export_time > (
+                                             SELECT MIN(export_time)
+                                             FROM playground.dbt_shop.raw_products
+                                             WHERE product_id = staged_product_date.product_id
+                                         )
+  AND staged_product_date.export_time
+        NOT IN (
+                    SELECT DISTINCT export_time
+                    FROM playground.dbt_shop.raw_products
+                    WHERE product_id = staged_product_date.product_id
+               );
+```
+
+![filtered cartesian product](docs/filtered-cartesian-product-product-export_time.png)
+
+The result of this filtering is represented by all the <product, export_time> entries that are not found 
+within the staging entries:
+
+![missing staged products](docs/missing-product-export_time.png)
+
+Now some of these entries are not necessary. If a product is deleted after the first staging day and
+does not occur anymore subsequently, the entry with the minimum export_time is enough information.
+
+What might happen though is that a product is deleted on one day, and appears again on a later day
+and is subsequently deleted again.
+
+In order to cope with such a situation, the [LAG](https://docs.snowflake.com/en/sql-reference/functions/lag.html)
+window function is being used in order to identify greater gaps between the deletions :
+
+```
+SELECT product_id,
+       export_time
+FROM (
+        SELECT product_id,
+               export_time,
+               LAG(export_time) OVER (PARTITION BY product_id ORDER BY export_time) prev_export_time
+        FROM (
+                  SELECT product_id,
+                         export_time
+                  FROM (
+                          (SELECT DISTINCT product_id
+                          FROM playground.dbt_shop.raw_products)
+                          CROSS JOIN
+                          (SELECT DISTINCT export_time
+                          FROM playground.dbt_shop.raw_products) AS staged_date
+                  )
+        ) staged_product_date
+
+        WHERE staged_product_date.export_time > (
+                                                     SELECT MIN(export_time)
+                                                     FROM playground.dbt_shop.raw_products
+                                                     WHERE product_id = staged_product_date.product_id
+                                                 )
+          AND staged_product_date.export_time
+                NOT IN (
+                            SELECT DISTINCT export_time
+                            FROM playground.dbt_shop.raw_products
+                            WHERE product_id = staged_product_date.product_id
+                       )
+) AS missing_staged_product
+WHERE (
+        (missing_staged_product.prev_export_time IS NULL)
+        OR missing_staged_product.export_time != (
+                                                        SELECT MIN(export_time)
+                                                        FROM playground.dbt_shop.raw_products
+                                                        WHERE export_time > missing_staged_product.prev_export_time
+                                                  )
+);
+```
+
+The filtering can be observed (marked in red) in the following image:
+
+![filtered missing staged products](docs/filtered-missing-product-export_time.png)
+
+
+The operation applied previously corresponds now to the inferred batched product deletions:
+
+![inferred product deletions](docs/deduplicated-missing-product-export_time.png)
 
 ## Getting started with dbt
 
