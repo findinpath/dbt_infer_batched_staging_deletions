@@ -281,9 +281,9 @@ Deactivate the Python virtual environment
 (venv) ➜ deactivate
 ```
 
-### Ensuring accuracy of the macro via dtspec 
+### Ensuring accuracy of the implementation via dtspec 
 
-It takes a while to develop custom logic within `dbt`  afterwards it needs to be tested whether it works.
+It takes a while to develop custom logic within `dbt`  and afterwards it is necessary to test it either manually or by doing automated tests to make sure that it works.
 
 By means of using automated tests for data transformations there could be ensured that the model works
 as expected with an extensive battery of tests on a test environment.
@@ -298,6 +298,39 @@ Within `dtspec` is specified in a [yaml](https://en.wikipedia.org/wiki/YAML) for
 
 `dtspec` framework offers means to read the yaml specification, and match the data from the actual tables, once
 the data transformation has been performed (via `dbt`) with the data from the specification scenario.  
+
+
+To give a hint to the reader about how `dtspec` works, a test scenario is presented in the lines below.
+
+```yml
+        factory:
+          data:
+            - source: raw_products
+              table: |
+                | export_time               | file                      | product_id        | product_name         |
+                | -                         | -                         | -                 |                      |
+                | 2021-01-01 00:00:00+00:00 | products-2021-01-01.csv   | milk              | Milk                 |
+                | 2021-01-01 00:00:00+00:00 | products-2021-01-01.csv   | apple             | Apple                |
+                | 2021-01-02 00:00:00+00:00 | products-2021-01-02.csv   | apple             | Apple                |
+                | 2021-01-03 00:00:00+00:00 | products-2021-01-03.csv   | apple             | Apple                |
+                | 2021-01-03 00:00:00+00:00 | products-2021-01-03.csv   | coconut           | Coconut              |
+
+        expected:
+          data:
+            - target: stg_products
+              table: |
+                | export_time  | file                      | product_id        | product_name         | _deleted   |
+                | -            | -                         | -                 | -                    | -          |
+                | 2021-01-01   | products-2021-01-01.csv   | milk              | Milk                 | False      |
+                | 2021-01-01   | products-2021-01-01.csv   | apple             | Apple                | False      |
+                | 2021-01-02   | products-2021-01-02.csv   | milk              | {NULL}               | True       |
+                | 2021-01-02   | products-2021-01-02.csv   | apple             | Apple                | False      |
+                | 2021-01-03   | products-2021-01-03.csv   | apple             | Apple                | False      |
+                | 2021-01-03   | products-2021-01-03.csv   | coconut           | Coconut              | False      |
+              by:
+                - export_time
+                - product_id
+```
 
 This project has introduced minor changes to the test code present in the project 
 [jaffle_shop-dtspec](https://github.com/gnilrets/jaffle_shop-dtspec/tree/dtspec)
