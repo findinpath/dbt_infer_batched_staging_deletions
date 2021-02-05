@@ -121,7 +121,7 @@ and is subsequently deleted again.
 In order to cope with such a situation, the [LAG](https://docs.snowflake.com/en/sql-reference/functions/lag.html)
 window function is being used in order to identify greater gaps between the deletions :
 
-```
+```sql
 SELECT product_id,
        export_time
 FROM (
