@@ -1,6 +1,6 @@
-# Infer staging deletions
+# Infer batched staging deletions
 
-This project presents a possible solution for inferring deletions within the staging 
+This project presents a possible solution for inferring batched deletions within the staging 
 data within an ELT pipeline.
 
 Suppose that a shop is exporting daily towards the data warehouse environment the
