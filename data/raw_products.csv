@@ -1,0 +1,7 @@
+export_time,file,product_id,product_name
+2021-01-01,products-2021-01-01.csv,1, milk
+2021-01-01,products-2021-01-01.csv,2, coconut
+2021-01-01,products-2021-01-01.csv,3, apple
+2021-01-02,products-2021-01-02.csv,2, coconut
+2021-01-02,products-2021-01-02.csv,3, apple
+2021-01-03,products-2021-01-03.csv,3, apple

@@ -1,0 +1,55 @@
+version: 2
+
+sources:
+  - name: dbt_shop
+    tables:
+      - name: raw_products
+        description: >
+          This table contains the source product entries to be staged into the data warehouse.
+          All the available products from the dbt shop are exported regularly (e.g.: daily/weekly).
+          This is why all the products from a batch share the same `export_time`
+          NOTE that in case that a product gets deactivated in the source system it will simply not
+          appear in the next exported batch of products.
+        columns:
+          - name: export_time
+            description: Timestamp when the export from source system was triggered.
+            tests:
+              - not_null
+          - name: file
+            description: Name of the file from where the row was loaded
+            tests:
+              - not_null
+          - name: product_id
+            description: ID of the product
+          - name: product_name
+            description: Name of the product
+
+models:
+
+  - name: stg_products
+    description: >
+        Staging table for the products from the dbt shop that corresponds to the
+        `raw_products` table to which it adds artificially deletion entries in case
+        that a product is deactivated from an exported day to the next one.
+    columns:
+      - name: export_time
+        description: >
+            The date when the product has been loaded in the staging table.
+            This date corresponds to either export_time from the source table.
+        tests:
+          - not_null
+      - name: file
+        description: Name of the file from where the row was loaded
+        tests:
+          - not_null
+      - name: product_id
+        description: Product identifier in the source database.
+        tests:
+          - not_null
+      - name: product_name
+        description: Name of the product
+      - name: _deleted
+        description: >
+          This field acts as a flag for deleted entries from the source database table.
+          It can have the value TRUE when the product got deleted, or NULL otherwise (when it was upserted).
+
