@@ -242,7 +242,7 @@ are being filtered out:
 
 ![filtered next product export times](docs/filtered-next-product-export_time.png)
 
-and the result is inferred from the `product_id` and `next_export_time` ) fields:
+and the result is inferred from the `product_id` and `next_export_time` fields:
 
 ![inferred product deletions](docs/deduplicated-missing-product-export_time.png)
 
