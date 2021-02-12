@@ -171,6 +171,84 @@ The operation applied previously corresponds now to the inferred batched product
 
 ![inferred product deletions](docs/deduplicated-missing-product-export_time.png)
 
+
+## Simplified solution description
+
+Instead of filtering out from the cartesian product of productId and export_time 
+to infer the deleted products, there could be used a much simpler solution.
+
+It is assumed again that the `raw_products` staging table has the following representation:
+
+![raw products](docs/raw-products.png)
+
+The result of the query
+
+```sql
+SELECT
+      export_time,
+      LEAD(export_time) OVER
+          (PARTITION BY product_id ORDER BY export_time)                   AS next_product_export_time,
+      (
+          SELECT MIN(export_time)
+          FROM playground.dbt_shop.raw_products
+          WHERE export_time > src.export_time
+      )                                                                     AS next_export_time,
+      product_id
+FROM playground.dbt_shop.raw_products AS src;
+```
+
+can be used to see when the next occurrences of product exports happen in the staging data:
+
+![next product export times](docs/next-product-export_time.png)
+
+
+There can be now easily be seen that the `next_product_export_time` for some of the entries
+is greater that the `next_export_time` or that the  `next_product_export_time` in some cases
+is simply `NULL`, otherwise said, is missing.
+
+By applying the query 
+
+```sql
+SELECT
+    next_export_time               AS export_time,
+    product_id,
+    (
+        next_export_time IS NOT NULL
+        AND (next_product_export_time IS NULL OR next_product_export_time > next_export_time)
+    )                              AS _deleted
+FROM (
+        SELECT
+            export_time,
+            LEAD(export_time) OVER
+                (PARTITION BY product_id ORDER BY export_time)                   AS next_product_export_time,
+            (
+                SELECT MIN(export_time)
+                FROM  playground.dbt_shop.raw_products
+                WHERE export_time > src.export_time
+            )                                                                     AS next_export_time,
+            product_id
+            FROM  playground.dbt_shop.raw_products AS src
+)
+WHERE _deleted
+```
+
+the valid entries:
+
+- the `next_product_export_time` corresponding to the `next_export_time` (marked in red)
+- the entries where the `next_export_time` is `NULL` (marked in yellow) meaning that
+these are the product exports done on the last staging day
+
+are being filtered out:
+
+![filtered next product export times](docs/filtered-next-product-export_time.png)
+
+and the result is inferred from the `product_id` and `next_export_time` ) fields:
+
+![inferred product deletions](docs/deduplicated-missing-product-export_time.png)
+
+
+This second solution is definitely easier to grasp and also probably more efficient.
+
 ## Getting started with dbt
 
 As described in the [introduction to dbt](https://docs.getdbt.com/docs/introduction) :

@@ -53,3 +53,31 @@ models:
           This field acts as a flag for deleted entries from the source database table.
           It can have the value TRUE when the product got deleted, or NULL otherwise (when it was upserted).
 
+  - name: stg_products_simplified
+      description: >
+        Staging table for the products from the dbt shop that corresponds to the
+        `raw_products` table to which it adds artificially deletion entries in case
+        that a product is deactivated from an exported day to the next one.
+
+        This is a more simplified version of the `stg_products` dbt model with the same result.
+      columns:
+        - name: export_time
+          description: >
+            The date when the product has been loaded in the staging table.
+            This date corresponds to either export_time from the source table.
+          tests:
+            - not_null
+        - name: file
+          description: Name of the file from where the row was loaded
+          tests:
+            - not_null
+        - name: product_id
+          description: Product identifier in the source database.
+          tests:
+            - not_null
+        - name: product_name
+          description: Name of the product
+        - name: _deleted
+          description: >
+            This field acts as a flag for deleted entries from the source database table.
+            It can have the value TRUE when the product got deleted, or NULL otherwise (when it was upserted).
