@@ -300,7 +300,7 @@ dbt_shop:
       role: accountadmin
       threads: 4
       database: playground
-      warehouse: analysis_wh_xs
+      warehouse: your-warehouse-name
       schema: dbt_shop
 config:
   send_anonymous_usage_stats: False
