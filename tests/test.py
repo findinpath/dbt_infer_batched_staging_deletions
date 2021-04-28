@@ -6,6 +6,7 @@ import os
 import dbt
 import dbt.main
 import dtspec
+import dtspec.specs
 import pandas as pd
 import sqlalchemy as sa
 import yaml
@@ -16,6 +17,9 @@ logging.getLogger("dbt").setLevel(logging.INFO)
 
 LOG = logging.getLogger('sqlalchemy.engine')
 LOG.setLevel(logging.ERROR)
+
+DBT_ROOT = os.getcwd()
+DTSPEC_ROOT = os.path.join(os.getcwd(), "tests")
 
 with open(os.path.join(os.getenv('HOME'), '.dbt', 'profiles.yml')) as f:
     DBT_PROFILE = yaml.safe_load(f)['dbt_shop']['outputs']['dev']
@@ -65,12 +69,22 @@ def load_sources(api):
     metadata = sa.MetaData()
 
     for source, data in api.spec['sources'].items():
+        fqn_table_name_tokens = source.split('.')
+        if (len(fqn_table_name_tokens)) == 3:
+            schema_name = fqn_table_name_tokens[1]
+            table_name = fqn_table_name_tokens[2]
+        elif (len(fqn_table_name_tokens)) == 2:
+            schema_name = fqn_table_name_tokens[0]
+            table_name = fqn_table_name_tokens[1]
+        else:
+            schema_name = DBT_PROFILE['schema']
+            table_name = source
         sa_table = sa.Table(
-            source,
+            table_name,
             metadata,
             autoload=True,
             autoload_with=SA_ENGINE,
-            schema=DBT_PROFILE['schema']
+            schema=schema_name
         )
 
         with SA_ENGINE.connect() as conn:
@@ -131,15 +145,25 @@ def load_actuals(api):
     with SA_ENGINE.connect() as conn:
         for target, _data in api.spec['targets'].items():
             LOGGER.info(f"Loading data from the target table {target}")
+            fqn_table_name_tokens = target.split('.')
+            if (len(fqn_table_name_tokens)) == 3:
+                schema_name = fqn_table_name_tokens[1]
+                table_name = fqn_table_name_tokens[2]
+            elif (len(fqn_table_name_tokens)) == 2:
+                schema_name = fqn_table_name_tokens[0]
+                table_name = fqn_table_name_tokens[1]
+            else:
+                schema_name = DBT_PROFILE['schema']
+                table_name = target
             sa_table = sa.Table(
-                target,
+                table_name,
                 metadata,
                 autoload=True,
                 autoload_with=SA_ENGINE,
-                schema=DBT_PROFILE['schema']
+                schema=schema_name
             )
             df = _stringify_sa(
-                pd.read_sql_table(target, conn, schema=DBT_PROFILE['schema']),
+                pd.read_sql_table(table_name, conn, schema_name),
                 sa_table
             )
 
@@ -151,17 +175,37 @@ def load_actuals(api):
 
 
 def test_dtspec():
-    for spec_filename in ['tests/demo-spec.yml','tests/advanced-spec.yml']:
-        LOGGER.info(f"Executing test specification {spec_filename}")
-        with open(spec_filename) as f:
-            api = dtspec.api.Api(yaml.safe_load(f))
+    with open(os.path.join(DBT_ROOT, "target", "manifest.json")) as mfile:
+            dbt_manifest = json.loads(mfile.read())
+    manifest = dtspec.specs.compile_dbt_manifest(dbt_manifest)
 
-        api.generate_sources()
-        clean_test_data(api)
-        load_sources(api)
-        run_dbt()
-        load_actuals(api)
-        api.assert_expectations()
+    compiled_specs = compile_dtspec(
+        manifest=manifest
+    )
+
+    api = dtspec.api.Api(compiled_specs)
+
+    api.generate_sources()
+    clean_test_data(api)
+    load_sources(api)
+    run_dbt()
+    load_actuals(api)
+    api.assert_expectations()
+
+
+def compile_dtspec(scenario_selector=None, case_selector=None, manifest=None):
+    search_path = os.path.join(DTSPEC_ROOT, "specs")
+    compiled_spec = dtspec.specs.compile_spec(
+        search_path,
+        scenario_selector=scenario_selector,
+        case_selector=case_selector,
+        manifest=manifest,
+    )
+
+    with open(os.path.join(DTSPEC_ROOT, "compiled_specs.yml"), "w") as compiled_file:
+        compiled_file.write(yaml.dump(compiled_spec, default_flow_style=False))
+
+    return compiled_spec
 
 
 if __name__ == '__main__':

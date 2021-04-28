@@ -10,25 +10,32 @@ identifiers:
 # All the raw sources used in dbt_shop
 sources:
 
-  - source: raw_products
+  - source: {{ dbt_source('dbt_shop', 'raw_products') }}
     identifier_map:
       - column: product_id
         identifier:
           name: product_id_generator
           attribute: id
 
-
+factories:
+  - factory: Blah
+    data:
+      - source: {{ dbt_source('dbt_shop', 'raw_products') }}
+        table: |
+          | export_time               | file                      | product_id        | product_name         |
+          | -                         | -                         | -                 |                      |
+          | 2021-01-10 00:00:00+00:00 | products-2021-01-10.csv   | milk              | Milk                 |
 
 targets:
 
-  - target: stg_products
+  - target: {{ dbt_ref('stg_products') }}
     identifier_map:
       - column: product_id
         identifier:
           name: product_id_generator
           attribute: id
 
-  - target: stg_products_simplified
+  - target: {{ dbt_ref('stg_products_simplified') }}
     identifier_map:
       - column: product_id
         identifier:
@@ -53,7 +60,7 @@ scenarios:
 
         factory:
           data:
-            - source: raw_products
+            - source: {{ dbt_source('dbt_shop', 'raw_products') }}
               table: |
                 | export_time               | file                      | product_id        | product_name         |
                 | -                         | -                         | -                 |                      |
@@ -65,7 +72,7 @@ scenarios:
 
         expected:
           data:
-            - target: stg_products
+            - target: {{ dbt_ref('stg_products') }}
               table: |
                 | export_time  | file                      | product_id        | product_name         | _deleted   |
                 | -            | -                         | -                 | -                    | -          |
@@ -79,7 +86,7 @@ scenarios:
                 - export_time
                 - product_id
 
-            - target: stg_products_simplified
+            - target: {{ dbt_ref('stg_products_simplified') }}
               table: |
                 | export_time  | file                      | product_id        | product_name         | _deleted   |
                 | -            | -                         | -                 | -                    | -          |
